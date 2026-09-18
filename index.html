@@ -1,0 +1,1505 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+<meta charset="UTF-8">
+
+<meta name="viewport"
+      content="width=device-width,
+               initial-scale=1.0,
+               maximum-scale=1.0,
+               user-scalable=no">
+
+<title>Yellow Stack</title>
+
+<style>
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html,
+body {
+    width: 100%;
+    height: 100%;
+
+    overflow: hidden;
+
+    background: #ffffff;
+
+    touch-action: none;
+
+    user-select: none;
+
+    font-family:
+        Arial,
+        "Noto Sans KR",
+        sans-serif;
+}
+
+canvas {
+    display: block;
+
+    width: 100vw;
+    height: 100vh;
+}
+
+
+/* =========================================
+   점수
+========================================= */
+
+#ui {
+    position: fixed;
+
+    top: 20px;
+    left: 0;
+
+    width: 100%;
+
+    text-align: center;
+
+    z-index: 10;
+
+    pointer-events: none;
+}
+
+#score {
+    color: #FFD21F;
+
+    font-size: 48px;
+
+    font-weight: 900;
+
+    text-shadow:
+        2px 2px 0 #111;
+}
+
+#message {
+    margin-top: 7px;
+
+    color: #FFD21F;
+
+    font-size: 15px;
+
+    font-weight: bold;
+
+    text-shadow:
+        1px 1px 0 #111;
+}
+
+
+/* =========================================
+   게임 오버
+========================================= */
+
+#gameOver {
+    position: fixed;
+
+    inset: 0;
+
+    display: none;
+
+    align-items: center;
+    justify-content: center;
+
+    flex-direction: column;
+
+    background:
+        rgba(255,255,255,0.95);
+
+    z-index: 30;
+}
+
+#gameOver h1 {
+    color: #FFD21F;
+
+    font-size: 48px;
+
+    font-weight: 900;
+
+    text-shadow:
+        2px 2px 0 #111;
+
+    margin-bottom: 10px;
+}
+
+#finalScore {
+    color: #FFD21F;
+
+    font-size: 24px;
+
+    font-weight: bold;
+
+    text-shadow:
+        1px 1px 0 #111;
+
+    margin-bottom: 25px;
+}
+
+#restartButton {
+    padding: 14px 34px;
+
+    border: 3px solid #111;
+
+    border-radius: 14px;
+
+    background: #FFD21F;
+
+    color: #111;
+
+    font-size: 18px;
+
+    font-weight: 900;
+
+    cursor: pointer;
+
+    box-shadow:
+        4px 4px 0 #111;
+}
+
+#restartButton:active {
+    transform:
+        translate(3px, 3px);
+
+    box-shadow:
+        1px 1px 0 #111;
+}
+
+
+/* =========================================
+   이미지 로딩 상태
+========================================= */
+
+#imageStatus {
+    position: fixed;
+
+    bottom: 10px;
+    left: 10px;
+
+    padding: 6px 10px;
+
+    border-radius: 8px;
+
+    background:
+        rgba(0,0,0,0.65);
+
+    color: white;
+
+    font-size: 11px;
+
+    z-index: 50;
+
+    pointer-events: none;
+}
+
+</style>
+
+</head>
+
+
+<body>
+
+
+<canvas id="game"></canvas>
+
+
+<div id="ui">
+
+    <div id="score">0</div>
+
+    <div id="message">
+        화면을 터치해서 블록을 놓으세요
+    </div>
+
+</div>
+
+
+<div id="gameOver">
+
+    <h1>GAME OVER</h1>
+
+    <div id="finalScore">
+        점수: 0
+    </div>
+
+    <button id="restartButton">
+        다시 하기
+    </button>
+
+</div>
+
+
+<!-- 이미지 상태 확인용 -->
+<div id="imageStatus">
+    이미지 확인 중...
+</div>
+
+
+<script>
+
+
+// =====================================================
+// CANVAS
+// =====================================================
+
+const canvas =
+    document.getElementById("game");
+
+const ctx =
+    canvas.getContext("2d");
+
+
+let width = 0;
+let height = 0;
+let pixelRatio = 1;
+
+
+function resizeCanvas() {
+
+    width =
+        window.innerWidth;
+
+    height =
+        window.innerHeight;
+
+    pixelRatio =
+        window.devicePixelRatio || 1;
+
+
+    canvas.width =
+        width * pixelRatio;
+
+    canvas.height =
+        height * pixelRatio;
+
+
+    canvas.style.width =
+        width + "px";
+
+    canvas.style.height =
+        height + "px";
+
+
+    ctx.setTransform(
+        pixelRatio,
+        0,
+        0,
+        pixelRatio,
+        0,
+        0
+    );
+}
+
+
+window.addEventListener(
+    "resize",
+    resizeCanvas
+);
+
+
+resizeCanvas();
+
+
+
+// =====================================================
+// 이미지 3개
+// =====================================================
+
+const images = [];
+
+
+const imagePaths = [
+
+    "images/image1.png",
+
+    "images/image2.png",
+
+    "images/image3.png"
+
+];
+
+
+let loadedImages = 0;
+
+let failedImages = 0;
+
+
+for (
+    let i = 0;
+    i < imagePaths.length;
+    i++
+) {
+
+    const img =
+        new Image();
+
+
+    /*
+     * 이미지 경로
+     *
+     * images/image1.png
+     * images/image2.png
+     * images/image3.png
+     */
+
+    img.src =
+        imagePaths[i];
+
+
+    img.onload =
+        function() {
+
+            loadedImages++;
+
+
+            console.log(
+                "이미지 로딩 성공:",
+                imagePaths[i]
+            );
+
+
+            updateImageStatus();
+        };
+
+
+    img.onerror =
+        function() {
+
+            failedImages++;
+
+
+            console.error(
+                "이미지 로딩 실패:",
+                imagePaths[i]
+            );
+
+
+            updateImageStatus();
+        };
+
+
+    images.push(img);
+}
+
+
+
+// =====================================================
+// 이미지 상태 표시
+// =====================================================
+
+function updateImageStatus() {
+
+    const status =
+        document.getElementById(
+            "imageStatus"
+        );
+
+
+    if (
+        loadedImages === 3
+    ) {
+
+        status.textContent =
+            "이미지 3개 로딩 완료";
+
+        status.style.display =
+            "none";
+
+    }
+
+    else if (
+        failedImages > 0
+    ) {
+
+        status.textContent =
+            "이미지 파일을 확인하세요";
+
+    }
+
+    else {
+
+        status.textContent =
+            "이미지 로딩 중...";
+    }
+}
+
+
+
+// =====================================================
+// 랜덤 이미지
+// =====================================================
+
+let lastImageIndex = -1;
+
+
+function getRandomImage() {
+
+    let randomIndex;
+
+
+    do {
+
+        randomIndex =
+            Math.floor(
+                Math.random() *
+                images.length
+            );
+
+    }
+
+    while (
+
+        randomIndex ===
+        lastImageIndex
+
+        &&
+
+        images.length > 1
+    );
+
+
+    lastImageIndex =
+        randomIndex;
+
+
+    return images[
+        randomIndex
+    ];
+}
+
+
+
+// =====================================================
+// 게임 설정
+// =====================================================
+
+const BLOCK_HEIGHT = 65;
+
+
+/*
+ * 기본 블록 폭
+ *
+ * 화면의 약 70% 정도
+ */
+
+const START_WIDTH = 280;
+
+
+/*
+ * 화면 아래쪽 여백
+ */
+
+const BOTTOM_MARGIN = 150;
+
+
+/*
+ * 노란색
+ */
+
+const YELLOW = "#FFD21F";
+
+
+
+// =====================================================
+// 게임 변수
+// =====================================================
+
+let blocks = [];
+
+let currentBlock = null;
+
+let score = 0;
+
+let speed = 3;
+
+let direction = 1;
+
+let cameraY = 0;
+
+let gameRunning = false;
+
+let lastTime = 0;
+
+
+
+// =====================================================
+// 블록 생성
+// =====================================================
+
+function createBlock() {
+
+    const previous =
+        blocks[
+            blocks.length - 1
+        ];
+
+
+    /*
+     * 이전 블록의 폭을 그대로 사용
+     */
+
+    let blockWidth;
+
+
+    if (previous) {
+
+        blockWidth =
+            previous.width;
+
+    }
+
+    else {
+
+        blockWidth =
+            Math.min(
+                START_WIDTH,
+                width * 0.70
+            );
+    }
+
+
+    /*
+     * 기본 위치
+     */
+
+    let x;
+
+
+    if (previous) {
+
+        x =
+            previous.x;
+
+    }
+
+    else {
+
+        x =
+            (
+                width -
+                blockWidth
+            ) / 2;
+    }
+
+
+    return {
+
+        x: x,
+
+        y:
+            height -
+            BOTTOM_MARGIN -
+            (
+                blocks.length *
+                BLOCK_HEIGHT
+            ),
+
+        width:
+            blockWidth,
+
+        height:
+            BLOCK_HEIGHT,
+
+        image:
+            getRandomImage()
+    };
+}
+
+
+
+// =====================================================
+// 게임 시작
+// =====================================================
+
+function startGame() {
+
+    blocks = [];
+
+    score = 0;
+
+    speed = 3;
+
+    direction = 1;
+
+    cameraY = 0;
+
+    gameRunning = true;
+
+    lastImageIndex = -1;
+
+
+    document
+        .getElementById("gameOver")
+        .style.display =
+        "none";
+
+
+    /*
+     * 첫 번째 바닥 블록
+     */
+
+    const baseWidth =
+        Math.min(
+            START_WIDTH,
+            width * 0.70
+        );
+
+
+    blocks.push({
+
+        x:
+            (
+                width -
+                baseWidth
+            ) / 2,
+
+        y:
+            height -
+            BOTTOM_MARGIN,
+
+        width:
+            baseWidth,
+
+        height:
+            BLOCK_HEIGHT,
+
+        image:
+            getRandomImage()
+    });
+
+
+    /*
+     * 움직이는 블록
+     */
+
+    currentBlock =
+        createBlock();
+
+
+    /*
+     * 왼쪽에서 시작
+     */
+
+    currentBlock.x =
+        -currentBlock.width;
+
+
+    direction = 1;
+
+
+    document
+        .getElementById("score")
+        .textContent =
+        "0";
+
+
+    document
+        .getElementById("message")
+        .textContent =
+        "화면을 터치해서 블록을 놓으세요";
+
+
+    lastTime =
+        performance.now();
+
+
+    requestAnimationFrame(
+        gameLoop
+    );
+}
+
+
+
+// =====================================================
+// 블록 놓기
+// =====================================================
+
+function dropBlock() {
+
+    if (!gameRunning)
+        return;
+
+
+    const previous =
+        blocks[
+            blocks.length - 1
+        ];
+
+
+    /*
+     * 겹치는 왼쪽
+     */
+
+    const left =
+        Math.max(
+            currentBlock.x,
+            previous.x
+        );
+
+
+    /*
+     * 겹치는 오른쪽
+     */
+
+    const right =
+        Math.min(
+
+            currentBlock.x +
+            currentBlock.width,
+
+            previous.x +
+            previous.width
+        );
+
+
+    /*
+     * 겹치는 폭
+     */
+
+    const overlap =
+        right - left;
+
+
+    /*
+     * 완전히 빗나감
+     */
+
+    if (overlap <= 0) {
+
+        endGame();
+
+        return;
+    }
+
+
+    /*
+     * 겹치는 부분만 남긴다
+     */
+
+    currentBlock.x =
+        left;
+
+    currentBlock.width =
+        overlap;
+
+
+    /*
+     * 쌓기
+     */
+
+    blocks.push(
+        currentBlock
+    );
+
+
+    score++;
+
+
+    document
+        .getElementById("score")
+        .textContent =
+        score;
+
+
+    /*
+     * 속도 증가
+     */
+
+    speed += 0.12;
+
+
+    /*
+     * 다음 블록
+     */
+
+    currentBlock =
+        createBlock();
+
+
+    /*
+     * 랜덤 방향
+     */
+
+    direction =
+        Math.random() < 0.5
+            ? -1
+            : 1;
+
+
+    /*
+     * 화면 밖에서 등장
+     */
+
+    if (
+        direction === 1
+    ) {
+
+        currentBlock.x =
+            -currentBlock.width;
+
+    }
+
+    else {
+
+        currentBlock.x =
+            width;
+    }
+}
+
+
+
+// =====================================================
+// 게임 오버
+// =====================================================
+
+function endGame() {
+
+    gameRunning =
+        false;
+
+
+    document
+        .getElementById("finalScore")
+        .textContent =
+        "점수: " +
+        score;
+
+
+    document
+        .getElementById("gameOver")
+        .style.display =
+        "flex";
+}
+
+
+
+// =====================================================
+// 블록 그리기
+// =====================================================
+
+function drawBlock(block) {
+
+    const drawY =
+        block.y +
+        cameraY;
+
+
+    /*
+     * ---------------------------------------
+     * 1. 검은색 테두리
+     * ---------------------------------------
+     */
+
+    ctx.fillStyle =
+        "#111111";
+
+
+    ctx.fillRect(
+
+        block.x - 3,
+
+        drawY - 3,
+
+        block.width + 6,
+
+        block.height + 6
+    );
+
+
+    /*
+     * ---------------------------------------
+     * 2. 노란색 배경
+     *
+     * 이미지가 안 나와도
+     * 블록 자체는 보이게 한다.
+     * ---------------------------------------
+     */
+
+    ctx.fillStyle =
+        YELLOW;
+
+
+    ctx.fillRect(
+
+        block.x,
+
+        drawY,
+
+        block.width,
+
+        block.height
+    );
+
+
+    /*
+     * ---------------------------------------
+     * 3. 이미지
+     * ---------------------------------------
+     */
+
+    const image =
+        block.image;
+
+
+    if (
+
+        image &&
+
+        image.complete &&
+
+        image.naturalWidth > 0 &&
+
+        image.naturalHeight > 0
+
+    ) {
+
+
+        ctx.save();
+
+
+        /*
+         * 블록 밖으로 이미지가
+         * 튀어나오지 않도록 한다.
+         */
+
+        ctx.beginPath();
+
+
+        ctx.rect(
+
+            block.x,
+
+            drawY,
+
+            block.width,
+
+            block.height
+        );
+
+
+        ctx.clip();
+
+
+        /*
+         * 원본 이미지 크기
+         */
+
+        const imageWidth =
+            image.naturalWidth;
+
+        const imageHeight =
+            image.naturalHeight;
+
+
+        /*
+         * 블록과 이미지의 비율
+         */
+
+        const imageRatio =
+            imageWidth /
+            imageHeight;
+
+
+        const blockRatio =
+            block.width /
+            block.height;
+
+
+        let drawWidth;
+        let drawHeight;
+
+
+        /*
+         * 이미지가 블록보다 가로로 긴 경우
+         */
+
+        if (
+            imageRatio >
+            blockRatio
+        ) {
+
+            drawHeight =
+                block.height;
+
+            drawWidth =
+                drawHeight *
+                imageRatio;
+        }
+
+
+        /*
+         * 이미지가 블록보다 세로로 긴 경우
+         */
+
+        else {
+
+            drawWidth =
+                block.width;
+
+            drawHeight =
+                drawWidth /
+                imageRatio;
+        }
+
+
+        /*
+         * 가운데 배치
+         */
+
+        const imageX =
+            block.x +
+            (
+                block.width -
+                drawWidth
+            ) / 2;
+
+
+        const imageY =
+            drawY +
+            (
+                block.height -
+                drawHeight
+            ) / 2;
+
+
+        /*
+         * 이미지 출력
+         */
+
+        ctx.drawImage(
+
+            image,
+
+            imageX,
+            imageY,
+
+            drawWidth,
+            drawHeight
+        );
+
+
+        ctx.restore();
+    }
+
+
+    /*
+     * ---------------------------------------
+     * 4. 위쪽 밝은 선
+     * ---------------------------------------
+     */
+
+    ctx.fillStyle =
+        "rgba(255,255,255,0.30)";
+
+
+    ctx.fillRect(
+
+        block.x,
+
+        drawY,
+
+        block.width,
+
+        4
+    );
+
+
+    /*
+     * ---------------------------------------
+     * 5. 아래쪽 노란색 그림자
+     * ---------------------------------------
+     */
+
+    ctx.fillStyle =
+        "rgba(0,0,0,0.12)";
+
+
+    ctx.fillRect(
+
+        block.x,
+
+        drawY +
+        block.height -
+        5,
+
+        block.width,
+
+        5
+    );
+}
+
+
+
+// =====================================================
+// 배경
+// =====================================================
+
+function drawBackground() {
+
+    /*
+     * 흰색
+     */
+
+    ctx.fillStyle =
+        "#FFFFFF";
+
+
+    ctx.fillRect(
+        0,
+        0,
+        width,
+        height
+    );
+
+
+    /*
+     * ---------------------------------------
+     * 노란색 땡땡이
+     * ---------------------------------------
+     */
+
+    ctx.save();
+
+
+    ctx.fillStyle =
+        YELLOW;
+
+
+    ctx.globalAlpha =
+        0.15;
+
+
+    const dotSpacing = 42;
+
+
+    for (
+        let y = 20;
+        y < height;
+        y += dotSpacing
+    ) {
+
+        for (
+            let x = 20;
+            x < width;
+            x += dotSpacing
+        ) {
+
+            ctx.beginPath();
+
+
+            ctx.arc(
+
+                x,
+                y,
+
+                3,
+
+                0,
+                Math.PI * 2
+            );
+
+
+            ctx.fill();
+        }
+    }
+
+
+    ctx.restore();
+
+
+
+    /*
+     * ---------------------------------------
+     * 노란색 빗금
+     * ---------------------------------------
+     */
+
+    ctx.save();
+
+
+    ctx.strokeStyle =
+        YELLOW;
+
+
+    ctx.globalAlpha =
+        0.09;
+
+
+    ctx.lineWidth =
+        2;
+
+
+    for (
+        let x = -height;
+        x < width + height;
+        x += 65
+    ) {
+
+        ctx.beginPath();
+
+
+        ctx.moveTo(
+            x,
+            height
+        );
+
+
+        ctx.lineTo(
+            x + height,
+            0
+        );
+
+
+        ctx.stroke();
+    }
+
+
+    ctx.restore();
+}
+
+
+
+// =====================================================
+// 게임 그리기
+// =====================================================
+
+function draw() {
+
+    /*
+     * 배경
+     */
+
+    drawBackground();
+
+
+    /*
+     * 쌓여있는 블록
+     */
+
+    for (
+        const block of blocks
+    ) {
+
+        drawBlock(
+            block
+        );
+    }
+
+
+    /*
+     * 움직이는 블록
+     */
+
+    if (
+
+        gameRunning &&
+
+        currentBlock
+
+    ) {
+
+        drawBlock(
+            currentBlock
+        );
+    }
+}
+
+
+
+// =====================================================
+// 게임 업데이트
+// =====================================================
+
+function update(delta) {
+
+    if (!gameRunning)
+        return;
+
+
+    /*
+     * 움직이는 블록
+     */
+
+    currentBlock.x +=
+        direction *
+        speed *
+        delta;
+
+
+    /*
+     * 오른쪽 벽
+     */
+
+    if (
+
+        currentBlock.x +
+        currentBlock.width >=
+        width
+
+    ) {
+
+        currentBlock.x =
+            width -
+            currentBlock.width;
+
+
+        direction =
+            -1;
+    }
+
+
+    /*
+     * 왼쪽 벽
+     */
+
+    if (
+        currentBlock.x <= 0
+    ) {
+
+        currentBlock.x =
+            0;
+
+
+        direction =
+            1;
+    }
+
+
+    /*
+     * 카메라 이동
+     */
+
+    const targetCamera =
+        Math.max(
+
+            0,
+
+            height * 0.38 -
+            currentBlock.y
+        );
+
+
+    cameraY +=
+        (
+            targetCamera -
+            cameraY
+        ) * 0.08;
+}
+
+
+
+// =====================================================
+// 게임 루프
+// =====================================================
+
+function gameLoop(time) {
+
+    const delta =
+        Math.min(
+
+            (
+                time -
+                lastTime
+            ) / 16.67,
+
+            2
+        );
+
+
+    lastTime =
+        time;
+
+
+    update(delta);
+
+
+    draw();
+
+
+    if (gameRunning) {
+
+        requestAnimationFrame(
+            gameLoop
+        );
+    }
+}
+
+
+
+// =====================================================
+// 터치 / 마우스
+// =====================================================
+
+canvas.addEventListener(
+
+    "pointerdown",
+
+    function(event) {
+
+        event.preventDefault();
+
+
+        dropBlock();
+    }
+);
+
+
+
+// =====================================================
+// 키보드
+// =====================================================
+
+document.addEventListener(
+
+    "keydown",
+
+    function(event) {
+
+        if (
+
+            event.code === "Space" ||
+
+            event.code === "Enter"
+
+        ) {
+
+            dropBlock();
+        }
+    }
+);
+
+
+
+// =====================================================
+// 다시 하기
+// =====================================================
+
+document
+    .getElementById("restartButton")
+    .addEventListener(
+
+        "click",
+
+        function() {
+
+            startGame();
+        }
+    );
+
+
+
+// =====================================================
+// 시작
+// =====================================================
+
+startGame();
+
+</script>
+
+
+</body>
+
+</html>
